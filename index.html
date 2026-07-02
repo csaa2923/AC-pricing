@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alpine Concierge Tirol | Anfrage Cockpit</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Alpine Concierge Tirol</p>
+        <h1>Anfrage Cockpit</h1>
+      </div>
+      <div class="status-strip">
+        <label for="statusSelect">Status</label>
+        <select id="statusSelect"></select>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="mode-switch" aria-label="Arbeitsmodus">
+        <button class="mode-button active" id="quickModeButton" type="button">Schnellabfrage</button>
+        <button class="mode-button" id="analysisModeButton" type="button">Genaue KI-Analyse</button>
+      </section>
+
+      <section id="alertBox" class="alert hidden" role="status"></section>
+
+      <section class="workspace">
+        <aside class="panel saved-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Archiv</p>
+              <h2>Gespeicherte Anfragen</h2>
+            </div>
+            <button class="ghost-button" id="newRequestButton" type="button">Neue Anfrage</button>
+          </div>
+          <div id="savedRequests" class="saved-list"></div>
+        </aside>
+
+        <section class="panel form-panel">
+          <div id="quickMode" class="mode-view">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Unter 30 Sekunden</p>
+                <h2>Schnellabfrage</h2>
+              </div>
+              <button id="quickAiButton" class="secondary-button" type="button">KI vorschlagen</button>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Leistung
+                <select id="leistung"></select>
+              </label>
+              <label>
+                Genaue Leistung / Wunschleistung
+                <input id="genaueLeistung" type="text" placeholder="z. B. Restaurant mit Taxi" />
+              </label>
+              <label>
+                Region
+                <select id="region"></select>
+              </label>
+              <label>
+                Andere Region
+                <input id="andereRegion" type="text" placeholder="Freitext" />
+              </label>
+              <label>
+                Datum von
+                <input id="datumVon" type="date" />
+              </label>
+              <label>
+                Datum bis
+                <input id="datumBis" type="date" />
+              </label>
+              <label>
+                Erwachsene
+                <input id="erwachsene" type="number" min="0" step="1" value="2" />
+              </label>
+              <label>
+                Kinder
+                <input id="kinder" type="number" min="0" step="1" value="0" />
+              </label>
+              <label>
+                Alter der Kinder
+                <input id="alterKinder" type="text" placeholder="z. B. 6 und 9" />
+              </label>
+              <label>
+                Geschätzte Dauer in Stunden
+                <input id="aufwandStunden" type="number" min="0" step="0.25" value="2" />
+              </label>
+              <label>
+                Unsicherheitsfaktor in Prozent
+                <input id="unsicherheitProzent" type="number" min="0" max="200" step="1" value="20" />
+              </label>
+              <label>
+                Brutto mit USt. anzeigen
+                <select id="bruttoAktiv">
+                  <option value="true">Ja</option>
+                  <option value="false">Nein</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              Kurze Beschreibung
+              <textarea id="beschreibung" rows="5" placeholder="Was möchte der Kunde erleben?"></textarea>
+            </label>
+          </div>
+
+          <div id="analysisMode" class="mode-view hidden">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Kundentext</p>
+                <h2>Genaue KI-Analyse</h2>
+              </div>
+              <button id="analyseButton" class="primary-button" type="button">KI analysieren</button>
+            </div>
+            <label>
+              Kundenanfrage einfügen
+              <textarea id="kundentext" rows="13" placeholder="Alpine Concierge Tirol Anfrage&#10;&#10;Service: Erleben & Entdecken&#10;Region: Innsbruck&#10;Datum/Zeitraum: 23.08.2026&#10;Personen: 2 Erwachsene&#10;Nachricht: Wir suchen ein besonderes Restaurant mit anschließendem Taxi."></textarea>
+            </label>
+          </div>
+
+          <div class="action-row">
+            <button id="calculateButton" class="primary-button" type="button">Kalkulation aktualisieren</button>
+            <button id="saveButton" class="secondary-button" type="button">Anfrage speichern</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="results-grid">
+        <article class="result-card">
+          <h2>Preiskalkulation</h2>
+          <div class="price-box">
+            <div><span>Basis netto</span><strong id="basisNetto">0 EUR</strong></div>
+            <div><span>Preis von</span><strong id="preisVon">0 EUR</strong></div>
+            <div><span>Preis bis</span><strong id="preisBis">0 EUR</strong></div>
+            <div><span>Mindestaufwand</span><strong id="minAufwand">0 h</strong></div>
+            <div><span>Maximalaufwand</span><strong id="maxAufwand">0 h</strong></div>
+            <div><span>Brutto optional</span><strong id="bruttoPreis">0 EUR</strong></div>
+          </div>
+          <p class="hint">Interne Richtkalkulation auf Basis von 150 EUR netto pro Stunde. Externe Kosten sind gesondert zu prüfen.</p>
+        </article>
+
+        <article class="result-card">
+          <h2>Strukturierte Daten</h2>
+          <div id="structuredFields" class="structured-grid"></div>
+        </article>
+
+        <article class="result-card wide">
+          <div class="card-title-row">
+            <h2>Angebotsvorschlag</h2>
+            <button data-copy="angebotText" class="ghost-button" type="button">Angebot kopieren</button>
+          </div>
+          <textarea id="angebotText" rows="8"></textarea>
+        </article>
+
+        <article class="result-card">
+          <div class="card-title-row">
+            <h2>WhatsApp-Text</h2>
+            <button data-copy="whatsappText" class="ghost-button" type="button">Kopieren</button>
+          </div>
+          <textarea id="whatsappText" rows="10"></textarea>
+        </article>
+
+        <article class="result-card">
+          <div class="card-title-row">
+            <h2>E-Mail-Text</h2>
+            <button data-copy="emailText" class="ghost-button" type="button">Kopieren</button>
+          </div>
+          <textarea id="emailText" rows="10"></textarea>
+        </article>
+
+        <article class="result-card">
+          <h2>Rückfragen</h2>
+          <textarea id="rueckfragen" rows="8"></textarea>
+        </article>
+
+        <article class="result-card">
+          <h2>Interne Bearbeitungshinweise</h2>
+          <textarea id="interneNotizen" rows="8"></textarea>
+        </article>
+
+        <article class="result-card">
+          <h2>Empfohlene Zusatzleistungen</h2>
+          <textarea id="zusatzleistungen" rows="8"></textarea>
+        </article>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
