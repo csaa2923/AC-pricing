@@ -251,6 +251,12 @@ function readStructuredFields() {
   return values;
 }
 
+function readFilledStructuredFields() {
+  return Object.fromEntries(
+    Object.entries(readStructuredFields()).filter(([, value]) => String(value ?? "").trim() !== "")
+  );
+}
+
 function applyAiResult(result) {
   const data = result || {};
   if (data.leistung && services.includes(data.leistung)) el.leistung.value = data.leistung;
@@ -278,7 +284,7 @@ function applyAiResult(result) {
   if (data.zusatzleistungen) el.zusatzleistungen.value = Array.isArray(data.zusatzleistungen) ? data.zusatzleistungen.join("\n") : data.zusatzleistungen;
   if (data.rueckfragen) el.rueckfragen.value = Array.isArray(data.rueckfragen) ? data.rueckfragen.join("\n") : data.rueckfragen;
 
-  renderStructuredFields({ ...data, ...readStructuredFields() });
+  renderStructuredFields({ ...data, ...readFilledStructuredFields() });
   calculate();
 }
 
