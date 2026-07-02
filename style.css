@@ -316,6 +316,7 @@ textarea:focus {
   background: var(--ice);
   border: 1px solid #c8dcdf;
   border-radius: 8px;
+  white-space: pre-wrap;
 }
 
 .alert.error {

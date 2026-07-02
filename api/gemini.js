@@ -15,17 +15,35 @@ function sendJson(res, status, payload) {
 }
 
 function extractJson(text) {
-  const cleaned = String(text || "")
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```$/i, "")
+  const rawResponse = String(text || "").trim();
+  const cleaned = rawResponse
+    .replace(/^\uFEFF/, "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
     .trim();
+
   try {
     return JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Ungültiges JSON in der Gemini-Antwort.");
-    return JSON.parse(match[0]);
+  } catch (firstError) {
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      const candidate = cleaned.slice(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch (secondError) {
+        const error = new Error("Ungültiges JSON in der Gemini-Antwort.");
+        error.rawResponse = rawResponse;
+        error.parseError = secondError.message || firstError.message;
+        throw error;
+      }
+    }
+
+    const error = new Error("Ungültiges JSON in der Gemini-Antwort.");
+    error.rawResponse = rawResponse;
+    error.parseError = firstError.message;
+    throw error;
   }
 }
 
@@ -71,13 +89,14 @@ function buildPrompt(mode, customerText, formData) {
 
   return [
     "Du bist ein erfahrener interner Angebots- und Concierge-Assistent für Alpine Concierge Tirol.",
-    "Antworte ausschließlich mit gültigem JSON. Keine Markdown-Zäune, keine Kommentare, kein Begleittext.",
+    "Antworte ausschließlich mit reinem gültigem JSON. Keine Markdown-Zäune, keine Kommentare, kein Begleittext.",
     "Nutze Deutsch für Texte an den Kunden. Datumswerte wenn möglich als YYYY-MM-DD.",
     `Modus: ${mode === "quick" ? "Schnellabfrage mit optionaler Aufwandsschätzung" : "Genaue Analyse einer vollständigen Kundenanfrage"}.`,
     `Stundensatz: ${HOURLY_RATE} EUR netto. Berechne Preisband mit Aufwand und Unsicherheitsfaktor, wenn möglich.`,
     "Alle Werte sind interne Vorschläge und sollen konservativ, hochwertig und concierge-tauglich formuliert sein.",
     "Erzeuge Rückfragen, WhatsApp-Text, E-Mail-Text, Angebotsvorschlag, interne Notizen und Zusatzleistungen.",
-    `JSON-Schema mit allen gewünschten Feldern: ${JSON.stringify(baseSchema)}`,
+    "Gib genau ein einzelnes JSON-Objekt zurück. Verwende doppelte Anführungszeichen, korrekte Kommas und keine trailing commas.",
+    `JSON-Schema mit allen gewünschten Feldern: ${JSON.stringify(baseSchema, null, 2)}`,
     `Aktuelle Formularwerte: ${JSON.stringify(formData || {})}`,
     `Kunden-/Anfragetext: ${customerText}`
   ].join("\n\n");
@@ -109,7 +128,12 @@ async function callModel(model, apiKey, prompt) {
 
   const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
   if (!text) throw new Error("Keine Antwort von Gemini erhalten.");
-  return extractJson(text);
+  try {
+    return extractJson(text);
+  } catch (error) {
+    error.model = model;
+    throw error;
+  }
 }
 
 function friendlyError(error) {
@@ -117,7 +141,7 @@ function friendlyError(error) {
   const code = String(error?.code || "");
   if (code.includes("API_KEY") || message.toLowerCase().includes("api key")) return "Ungültiger Gemini API-Key. Bitte GEMINI_API_KEY in Vercel prüfen.";
   if (code.includes("RESOURCE_EXHAUSTED") || error?.status === 429) return "Das Gemini API-Limit wurde erreicht. Bitte später erneut versuchen.";
-  if (message.includes("Ungültiges JSON")) return "Gemini hat ungültiges JSON geliefert. Bitte erneut versuchen oder manuell weiterarbeiten.";
+  if (message.includes("Ungültiges JSON")) return "Gemini hat kein gültiges JSON geliefert. Die Rohantwort wird angezeigt; bitte manuell weiterarbeiten oder erneut versuchen.";
   if (message.includes("Keine Antwort")) return "Gemini hat keine Antwort geliefert. Bitte erneut versuchen.";
   return message || "Netzwerkfehler bei der Gemini-Anfrage.";
 }
@@ -126,7 +150,7 @@ async function readRequestBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString("utf8");
+  const raw = chunks.map((chunk) => Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk)).join("");
   if (!raw) return {};
   return JSON.parse(raw);
 }
@@ -169,7 +193,12 @@ module.exports = async function handler(req, res) {
       tried.push(model);
       const isModelProblem = error?.status === 404 || String(error?.message || "").toLowerCase().includes("not found");
       if (!isModelProblem) {
-        sendJson(res, error?.status === 429 ? 429 : 502, { error: friendlyError(error), triedModels: tried });
+        sendJson(res, error?.status === 429 ? 429 : 502, {
+          error: friendlyError(error),
+          rawResponse: error?.rawResponse,
+          parseError: error?.parseError,
+          triedModels: tried
+        });
         return;
       }
     }

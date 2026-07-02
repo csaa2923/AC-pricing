@@ -311,13 +311,24 @@ async function callGemini(mode) {
     });
 
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || "Die KI-Anfrage konnte nicht verarbeitet werden.");
+    if (!response.ok) {
+      const error = new Error(payload.error || "Die KI-Anfrage konnte nicht verarbeitet werden.");
+      error.rawResponse = payload.rawResponse;
+      error.parseError = payload.parseError;
+      throw error;
+    }
     if (!payload.data || typeof payload.data !== "object") throw new Error("Gemini hat keine auswertbare Antwort geliefert.");
 
     applyAiResult(payload.data);
     showAlert("KI-Analyse übernommen. Alle Felder bleiben manuell überschreibbar.");
   } catch (error) {
-    showAlert(error.message || "Netzwerkfehler bei der KI-Anfrage. Die App bleibt manuell nutzbar.", "error");
+    const details = [];
+    if (error.parseError) details.push(`Parser-Detail: ${error.parseError}`);
+    if (error.rawResponse) details.push(`Gemini-Rohantwort:\n${error.rawResponse}`);
+    showAlert(
+      [error.message || "Netzwerkfehler bei der KI-Anfrage. Die App bleibt manuell nutzbar.", ...details].join("\n\n"),
+      "error"
+    );
   } finally {
     button.disabled = false;
     button.textContent = originalText;
